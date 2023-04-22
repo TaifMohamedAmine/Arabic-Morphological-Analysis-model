@@ -1,4 +1,5 @@
-# Projet-Nlp (work in progress)
-Analyseur morphologique de langue arabe
+# Arabic root extraction tool (nlp) (work in progress)
 
-le .rar de corpus utilisé peut être téléchargé de : https://sourceforge.net/projects/kalimat/files/kalimat/Morphological_Analysis_Corpus/
+The corpus used for training can be dowloaded from: https://sourceforge.net/projects/kalimat/files/kalimat/Morphological_Analysis_Corpus/
+
+This project uses an encoder decoder sequence to sequence model in order to extract the root from a given word
