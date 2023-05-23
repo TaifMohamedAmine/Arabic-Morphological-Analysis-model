@@ -6,23 +6,17 @@ class Prepare_data :
     this class is to add padding to our data, extract the vocabulary, and create out training batches
     """
 
-    def __init__(self, data_path, batch_size):
+    def __init__(self, data_path):
 
         self.data_path = data_path
         # we extract the data into a dataframe
         self.data = pd.read_csv(self.data_path)
-
-        # we define our batch size for our training
-        self.batch_size = batch_size
 
         # our padding character : 
         self.pad_char = '%'
 
         # our final padded data ready for training + indexed dictionnary for our char emebeddings
         self.final_data, self.char_index_dic = self.set_data()  
-
-        # our final data batches
-        self.batches = self.data_batches()
 
 
 
@@ -65,19 +59,6 @@ class Prepare_data :
         return padded_data, char_to_idx_map
 
 
-    def data_batches(self):
-        final_data = []
-        for instance in self.final_data : 
-            tmp = []
-            word = [self.char_index_dic[char] for char in instance[0]]
-            root = [self.char_index_dic[char] for char in instance[1]]
-            tmp.append(word)
-            tmp.append(root)
-            final_data.append(tmp)
-
-        size= self.batch_size 
-        batches = [final_data[i:i + size] for i in range(0, len(final_data), size)]
-        return batches
 
 
 
