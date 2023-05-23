@@ -45,9 +45,9 @@ class Preprocessing :
                 annotation = sentence.find("annotation")
                 for morphem in annotation.findall("ArabicLexical"):
                     # eliminate the words with no morphems
-                    if morphem.get("pos")!= 'غير عربية': 
+                    if (morphem.get("pos")!= 'غير عربية') and (len(araby.strip_diacritics(morphem.get('lemma')))>= 3): 
                         # remove punctuation from the word
-                        word = self.sow + araby.strip_diacritics(morphem.get('word')) + self.eow
+                        word = self.sow + araby.strip_diacritics(morphem.get('lemma')) + self.eow
                         root = self.sow + araby.strip_diacritics(morphem.get('root')) + self.eow
                         data.append([word, root])
         return data
