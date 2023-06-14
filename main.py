@@ -8,6 +8,11 @@ import time
 from sklearn.preprocessing import StandardScaler
 
 
+"""
+I need to add positionnal embeddings for my encoder ==> done
+"""
+
+
 class Model(nn.Module) :
     '''
     Our model training class :p
@@ -85,8 +90,13 @@ class Model(nn.Module) :
         self.criterion = nn.CrossEntropyLoss(ignore_index =self.char_index_dic[self.pad_char])
 
         # Our optimizers used : 
-        self.opt1 = optim.Adam(self.BILSTM.parameters(), lr = self.lr )
+        self.opt1 = optim.Adam([*self.embedding.parameters(), *self.BILSTM.parameters()], lr = self.lr )
         self.opt2 = optim.Adam([*self.LSTM.parameters(), *self.input_dense.parameters(), *self.Linear.parameters()], lr = self.lr)
+
+        # we create our positionnal encoding : 
+
+        self.pos_embedding = self.embedding
+
 
         print("all the parameters are initialized")
 
@@ -101,10 +111,38 @@ class Model(nn.Module) :
         return word_char_idx_seq # word sequence
     
 
+    def positional_encoding(self, embedded_batch):
+        """
+        this method is to add a positionnal encoding for the a given embedded input sequence
+        
+        input : 
+            - embedded input batch 
+        
+        returns : 
+            - embedded sequence with positionnal encoding     
+        """
+
+        # the shape of the embedded vec (batch size, sequence length, embedding size)
+        pos_embedding = torch.zeros(embedded_batch.size())
+        #print(pos_embedding.size())
+
+        for idx in range(embedded_batch.size(0)):
+            for char in range(embedded_batch.size(1)):
+                for pos in range(embedded_batch.size(2)) :
+                    if pos % 2 : # when the position index is odd
+                        pos_embedding[idx][char][pos] = np.cos(char / (10000 **(2 * pos / embedded_batch.size(2))))
+                    else : 
+                        pos_embedding[idx][char][pos] = np.sin(char / (10000 **(2 * pos / embedded_batch.size(2))))
+
+
+        return pos_embedding
+
+
+
 
     # Let's now build out model :)
 
-    def encode(self, batch):
+    def encode(self, batch, pos_embedding):
         '''
         input : a batch of sequences of instances : [word_seq , root_seq] * batch_size
                 input_size : (input_size,2)
@@ -118,7 +156,8 @@ class Model(nn.Module) :
         root_batch = torch.tensor(root_batch)
         
         # we create embedding of the word batch : 
-        embedded_word_batch = self.embedding(word_batch)
+        embedded_word_batch = self.embedding(word_batch) + pos_embedding 
+ 
         # we initialize the weights of the encoder network with a normal distribution
         init_hid = nn.init.xavier_normal_(torch.zeros(2*self.num_layers, len(batch), self.hidden_size), gain=0.5)
         init_ce = nn.init.xavier_normal_(torch.zeros(2*self.num_layers, len(batch), self.hidden_size), gain=0.5)
@@ -179,6 +218,7 @@ class Model(nn.Module) :
             outputs.append(soft_out)
         return outputs
     
+        
 
     def train_model(self, batches, teacher_forcing_bool, epoch):
         '''
@@ -188,11 +228,17 @@ class Model(nn.Module) :
         epoch_loss = 0
         n = 0            
         test_word = '$' + 'تحليل' + '£'
+
+        pos_encoding = self.positional_encoding(self.embedding(torch.tensor([item[0] for item in train_batches[0]])))
+
         for batch in train_batches :
             #print(self.predict(test_word))
             self.opt1.zero_grad()
             self.opt2.zero_grad()
-            root_batch, encoder_output, encoder_states = self.encode(batch)
+            if len(batch) == self.batch_size :
+                root_batch, encoder_output, encoder_states = self.encode(batch, pos_encoding)
+            else : 
+                root_batch, encoder_output, encoder_states = self.encode(batch, self.positional_encoding(self.embedding(torch.tensor([item[0] for item in batch]))))
             outputs = self.decode(encoder_states, root_batch, teacher_forcing_bool, epoch)
             a = [torch.squeeze(item, 1) for item in outputs]
             a = [torch.unsqueeze(item, 0) for item in a]
@@ -201,6 +247,9 @@ class Model(nn.Module) :
             output = output.view(-1, output_dim)
             trg = root_batch.transpose(0, 1)
             trg = trg.reshape(-1)
+
+            """print(output, trg)
+            raise Exception("")"""
             loss = self.criterion(output, trg)
             loss.backward()
             torch.nn.utils.clip_grad_norm_([*self.LSTM.parameters(), *self.BILSTM.parameters()], 1)
@@ -222,9 +271,13 @@ class Model(nn.Module) :
         val_batches = batches
         n = 0
         epoch_loss = 0
+        pos_encoding = self.positional_encoding(self.embedding(torch.tensor([item[0] for item in val_batches[0]])))
         with torch.no_grad() :
             for batch in val_batches :
-                root_batch, encoder_output ,encoder_states = self.encode(batch)
+                if len(batch) == self.batch_size :
+                    root_batch, encoder_output, encoder_states = self.encode(batch, pos_encoding)
+                else : 
+                    root_batch, encoder_output, encoder_states = self.encode(batch, self.positional_encoding(self.embedding(torch.tensor([item[0] for item in batch]))))
                 outputs = self.decode(encoder_states, root_batch, teacher_forcing_bool, epoch)
                 a = [torch.squeeze(item, 1) for item in outputs]
                 a = [torch.unsqueeze(item, 0) for item in a]
@@ -273,9 +326,8 @@ class Model(nn.Module) :
             #print('stopping cond incremented +3 :', self.counter)
             d = depth ** 4
             #print(self.counter, d)
-            if self.counter >= d:
-                return 
-
+            if self.counter >= d: return 
+            
 
         else : 
 
@@ -338,7 +390,7 @@ class Model(nn.Module) :
 
 
     def predict(self, word):
-        
+
         test_word = self.sow + word + self.eow
         # Let's turn the word into a sequence of word indexes 
         word_seq = self.word_to_seq(test_word)
@@ -447,7 +499,7 @@ class Model(nn.Module) :
         print(f'The model has {self.count_parameters():,} trainable parameters')
 
         epochs = list(range(num_epochs))
-        best_val_loss = 1000
+        best_val_loss = 99999
         best_model_par = 0
         losses =[]
         test_word = '$' + 'تحليل' + '£'
@@ -455,7 +507,6 @@ class Model(nn.Module) :
             print('epoch num : ', epoch) 
             t1 = time.time()
             train_batches = random.sample(self.train_batches , len(self.train_batches))
-            #val_batches = random.sample(val_batches, len(val_batches))    
             train_loss= self.train_model(train_batches, 1, epoch)
             val_loss = self.evaluate_model(self.val_batches, 0, epoch) # we set the teacher forcing to false            
             t2 = time.time()
@@ -469,7 +520,7 @@ class Model(nn.Module) :
             if val_loss < best_val_loss :
                 best_val_loss = val_loss 
                 best_model_par = self.state_dict()
-        torch.save(best_model_par, 'projet NLP/best_model2.pt')
+        torch.save(best_model_par, 'projet NLP/best_model3.pt')
         predicted_root = self.predict(test_word)
         print(predicted_root)       
         return losses
