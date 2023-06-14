@@ -93,11 +93,6 @@ class Model(nn.Module) :
         self.opt1 = optim.Adam([*self.embedding.parameters(), *self.BILSTM.parameters()], lr = self.lr )
         self.opt2 = optim.Adam([*self.LSTM.parameters(), *self.input_dense.parameters(), *self.Linear.parameters()], lr = self.lr)
 
-        # we create our positionnal encoding : 
-
-        self.pos_embedding = self.embedding
-
-
         print("all the parameters are initialized")
 
     
